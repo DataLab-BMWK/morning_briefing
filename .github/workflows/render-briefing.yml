@@ -5,6 +5,16 @@ on:
     # Run daily at 7:30 AM Berlin Time (5:30 UTC during summer, 6:30 UTC during winter)
     - cron: '30 5 * * *'  # Summer time (CEST)
   workflow_dispatch: # Allow manual triggering
+    inputs:
+      send_email:
+        description: 'Send email after rendering'
+        required: false
+        default: true
+        type: boolean
+      email_recipients:
+        description: 'Override email recipients (comma-separated)'
+        required: false
+        type: string
 
 jobs:
   render:
@@ -12,6 +22,10 @@ jobs:
     
     permissions:
       contents: write
+      
+    outputs:
+      pdf_generated: ${{ steps.render.outputs.success }}
+      pdf_path: ${{ steps.render.outputs.pdf_path }}
       
     steps:
     - name: Checkout repository
@@ -43,16 +57,9 @@ jobs:
           
     - name: Install fonts
       run: |
-        # Create fonts directory in system
         sudo mkdir -p /usr/share/fonts/truetype/bundesweb
-        
-        # Copy fonts to system directory
         sudo cp fonts/*.ttf /usr/share/fonts/truetype/bundesweb/
-        
-        # Update font cache
         sudo fc-cache -fv
-        
-        # Verify fonts are installed
         fc-list | grep -i bundes || echo "BundesSans fonts installed"
         
     - name: Setup Quarto
@@ -62,7 +69,6 @@ jobs:
         
     - name: Install Typst
       run: |
-        # Install Typst for PDF generation
         curl -fsSL https://typst.community/typst-install/install.sh | sh
         echo "$HOME/.local/bin" >> $GITHUB_PATH
         
@@ -76,26 +82,54 @@ jobs:
           
     - name: Install R dependencies
       run: |
-        # Install renv first
         R -e "install.packages('renv', repos = c(CRAN = 'https://cloud.r-project.org'))"
-        
-        # Restore packages from renv.lock
         R -e "renv::restore()"
         
     - name: Render Morning Briefing
+      id: render
       run: |
-        # Set environment variables for rendering
         export QUARTO_DENO_DOM_LOG_LEVEL=WARNING
         
-        # Render the document
-        quarto render morning_briefing.qmd --to typst-pdf
+        echo "🔄 Starting Morning Briefing render..."
+        
+        if quarto render morning_briefing.qmd --to typst-pdf; then
+          echo "✅ PDF rendered successfully"
+          echo "success=true" >> $GITHUB_OUTPUT
+          echo "pdf_path=morning_briefing.pdf" >> $GITHUB_OUTPUT
+          
+          # Get file size for logging
+          size=$(du -h morning_briefing.pdf | cut -f1)
+          echo "📄 PDF size: $size"
+        else
+          echo "❌ PDF rendering failed"
+          echo "success=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
         
     - name: Upload PDF artifact
+      if: steps.render.outputs.success == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: morning-briefing-${{ github.run_number }}
         path: morning_briefing.pdf
         retention-days: 30
+
+  email:
+    needs: render
+    runs-on: ubuntu-latest
+    if: >
+      always() && 
+      needs.render.outputs.pdf_generated == 'true' && 
+      (github.event_name == 'schedule' || inputs.send_email == true)
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Download PDF artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: morning-briefing-${{ github.run_number }}
         
     - name: Send Morning Briefing via Email
       uses: dawidd6/action-send-mail@v3
@@ -105,7 +139,7 @@ jobs:
         username: ${{ secrets.EMAIL_USERNAME }}
         password: ${{ secrets.EMAIL_PASSWORD }}
         subject: "📊 Morning Briefing - ${{ github.run_date }}"
-        to: ${{ secrets.EMAIL_RECIPIENTS }}
+        to: ${{ inputs.email_recipients || secrets.EMAIL_RECIPIENTS }}
         from: Morning Briefing Bot <${{ secrets.EMAIL_USERNAME }}>
         html_body: |
           <h2>📊 Daily Morning Briefing</h2>
@@ -113,43 +147,65 @@ jobs:
           
           <p>Hier ist Ihr tagesaktuelles Morning Briefing für den <strong>${{ github.run_date }}</strong>.</p>
           
-          <p>Das Morning Briefing finden Sie im Anhang als PDF.</p>
-
+          <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
+            <h3>📋 Inhalt</h3>
+            <ul>
+              <li>🌍 Globale Finanzindikatoren (DAX, S&P 500, Öl, etc.)</li>
+              <li>📅 Wirtschaftskalender Deutschland</li>
+              <li>📰 Top 5 Wirtschaftsnachrichten</li>
+              <li>🏭 Branchen-News (Chemie, Automotive, Stahl)</li>
+            </ul>
+          </div>
+          
+          <p>Das vollständige Morning Briefing finden Sie im Anhang als PDF.</p>
+          
+          <hr>
+          <p><small>
+            Automatisch generiert am ${{ github.run_date }} | 
+            <a href="https://github.com/${{ github.repository }}">Repository</a>
+          </small></p>
         attachments: morning_briefing.pdf
+        
+    - name: Email Status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Email sent successfully"
+        else
+          echo "❌ Email sending failed"
+        fi
+
+  commit:
+    needs: [render, email]
+    runs-on: ubuntu-latest
+    if: always() && needs.render.outputs.pdf_generated == 'true'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Download PDF artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: morning-briefing-${{ github.run_number }}
         
     - name: Commit and push updated PDF
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         
-        # Add the generated PDF
         git add morning_briefing.pdf
         
-        # Check if there are changes to commit
         if git diff --staged --quiet; then
           echo "No changes to commit"
         else
-          git commit -m "📊 Update Morning Briefing - $(date '+%Y-%m-%d %H:%M')"
+          commit_msg="📊 Update Morning Briefing - $(date '+%Y-%m-%d %H:%M')"
+          if [ "${{ needs.email.result }}" == "success" ]; then
+            commit_msg="$commit_msg ✉️"
+          elif [ "${{ needs.email.result }}" == "failure" ]; then
+            commit_msg="$commit_msg ❌"
+          fi
+          
+          git commit -m "$commit_msg"
           git push
         fi
-        
-    - name: Create Release (Weekly)
-      if: github.event.schedule == '0 8 * * 1' # Only on Mondays
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: briefing-${{ github.run_number }}
-        name: Weekly Morning Briefing - ${{ github.run_number }}
-        body: |
-          📊 Weekly Morning Briefing compilation
-          
-          Generated on: ${{ github.run_date }}
-          
-          This release contains the latest morning briefing with:
-          - Global financial indicators
-          - Economic calendar
-          - Top economic news stories
-          - Industry-specific news
-          
-        files: morning_briefing.pdf
-        draft: false
-        prerelease: false

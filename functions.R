@@ -2,10 +2,9 @@
 # =========================
 
 # Load required libraries
-library(xml2)
 library(httr2)
+library(xml2)
 library(yahoofinancer)
-library(ggplot2)
 library(gt)
 library(dplyr)
 library(scales)
@@ -16,11 +15,11 @@ fetch_rss_feed <- function(url) {
     feed_content <- resp_body_string(response)
     feed <- read_xml(feed_content)
 
-    return(list(
+    list(
         headlines = xml_text(xml_find_all(feed, "//item/title")),
         links = xml_text(xml_find_all(feed, "//item/link")),
         descriptions = xml_text(xml_find_all(feed, "//item/description"))
-    ))
+    )
 }
 
 # Function to print news articles
@@ -63,12 +62,12 @@ get_financial_indicator <- function(symbol, name) {
 
             if (is.null(history) || nrow(history) == 0) {
                 cat("Warning: No data available for", symbol, "-", name, "\n")
-                return(create_na_result(name))
+                create_na_result(name)
             }
 
             current_price <- tail(history$close, 1)
             if (is.na(current_price) || current_price == 0) {
-                return(create_na_result(name))
+                create_na_result(name)
             }
 
             # Calculate changes with defensive programming
@@ -104,7 +103,7 @@ get_financial_indicator <- function(symbol, name) {
             # Format current price based on instrument type
             decimals <- if (grepl("USD|EUR", name)) 4 else 2
 
-            return(data.frame(
+            data.frame(
                 Indikator = name,
                 Aktuell = round(current_price, decimals),
                 "1T %" = format_change(change_1d),
@@ -112,18 +111,18 @@ get_financial_indicator <- function(symbol, name) {
                 "YTD %" = format_change(change_ytd),
                 "1J %" = format_change(change_1y),
                 check.names = FALSE
-            ))
+            )
         },
         error = function(e) {
             cat("Error for", symbol, "-", name, ":", e$message, "\n")
-            return(create_na_result(name))
+            create_na_result(name)
         }
     )
 }
 
 # Helper function to create NA result
 create_na_result <- function(name) {
-    return(data.frame(
+    data.frame(
         Indikator = name,
         Aktuell = NA,
         "1T %" = NA,
@@ -131,21 +130,21 @@ create_na_result <- function(name) {
         "YTD %" = NA,
         "1J %" = NA,
         check.names = FALSE
-    ))
+    )
 }
 
 # Helper function to calculate percentage change
 calculate_change <- function(current, previous) {
     if (is.na(current) || is.na(previous) || previous == 0) {
-        return(NA)
+        NA
     }
-    return((current - previous) / previous * 100)
+    (current - previous) / previous * 100
 }
 
 # Helper function to format change values
 format_change <- function(change) {
     if (is.na(change)) return(NA)
-    return(round(change, 2))
+    round(change, 2)
 }
 
 # Function to create financial indicators table
@@ -168,11 +167,11 @@ create_financial_table <- function() {
     )
 
     # Function to try multiple symbols
-    get_indicator_with_alternatives <- function(primary_symbol, name) {
+    get_indicator_with_alts <- function(primary_symbol, name) {
         # Try primary symbol first
         result <- get_financial_indicator(primary_symbol, name)
         if (!is.null(result) && !all(is.na(result[2:6]))) {
-            return(result)
+            result
         }
 
         # Try alternatives if available
@@ -181,19 +180,19 @@ create_financial_table <- function() {
                 cat("Trying alternative symbol", alt_symbol, "for", name, "\n")
                 result <- get_financial_indicator(alt_symbol, name)
                 if (!is.null(result) && !all(is.na(result[2:6]))) {
-                    return(result)
+                    result
                 }
             }
         }
 
         # Return NULL if all attempts failed
-        return(NULL)
+        NULL
     }
 
     # Collect all data
     indicator_data <- NULL
     for (ind in indicators) {
-        data <- get_indicator_with_alternatives(ind$symbol, ind$name)
+        data <- get_indicator_with_alts(ind$symbol, ind$name)
         if (!is.null(data)) {
             indicator_data <- rbind(indicator_data, data)
         }
@@ -244,7 +243,7 @@ create_financial_table <- function() {
                 table.font.names = "BundesSans Web"
             )
     } else {
-        cat("Fehler beim Laden der Marktdaten.\n\n")
+        cat("Error loading market data.\n\n")
     }
 }
 
@@ -319,7 +318,7 @@ get_industry_news <- function(max_stories = 5) {
         print_news(filtered_headlines, filtered_links, max_stories)
     } else {
         cat(
-            "Keine relevanten Nachrichten aus den Bereichen Chemie, Automotive oder Stahl gefunden.\n\n"
+            "No relevant news found in the Chemistry, Automotive or Steel sectors.\n\n"
         )
     }
 }
@@ -333,7 +332,7 @@ get_economic_calendar <- function() {
         },
         error = function(e) {
             cat(
-                "Fehler beim Laden des Wirtschaftskalenders: ",
+                "Error loading economic calendar: ",
                 e$message,
                 "\n\n"
             )
@@ -346,8 +345,6 @@ get_basic_economic_indicators <- function() {
     tryCatch(
         {
             # Create a simple table with key German economic indicators
-            current_date <- format(Sys.Date(), "%d.%m.%Y")
-
             # Basic economic events (this could be expanded with real API data)
             events <- data.frame(
                 Datum = c(
@@ -396,7 +393,7 @@ get_basic_economic_indicators <- function() {
         },
         error = function(e) {
             cat(
-                "Fehler beim Erstellen der Indikator-Tabelle: ",
+                "Error creating indicator table: ",
                 e$message,
                 "\n\n"
             )

@@ -17,6 +17,7 @@ execute:
 ---
 
 ```{r setup}
+#| include: false
 # Install packages if not already installed
 required_packages <- c("xml2", "httr2", "yahoofinancer", "ggplot2", "gt", "dplyr", "scales")
 

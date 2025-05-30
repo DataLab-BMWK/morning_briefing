@@ -13,7 +13,6 @@ This repository includes a GitHub Action that automatically generates the Mornin
 - **Email Delivery**: Automatically sends the Morning Briefing via email to configured recipients
 - **Artifact Storage**: Saves generated PDFs as artifacts for 30 days
 - **Git Integration**: Commits updated PDFs back to the repository
-- **Weekly Releases**: Creates GitHub releases every Monday with the latest briefing
 
 ### Workflow Steps
 
@@ -25,7 +24,6 @@ This repository includes a GitHub Action that automatically generates the Mornin
 6. **Artifact Upload**: Saves PDF as a downloadable artifact
 7. **Email Delivery**: Sends the PDF via email to configured recipients
 8. **Git Commit**: Commits the updated PDF to the repository
-9. **Release Creation**: Creates weekly releases (Mondays only)
 
 ### Configuration
 
@@ -69,10 +67,9 @@ You can manually trigger the workflow:
 3. Click "Run workflow" button
 4. Choose the branch and click "Run workflow"
 
-### Artifacts and Releases
+### Artifacts and Repository Updates
 
 - **Daily Artifacts**: Each run creates a numbered artifact (e.g., `morning-briefing-123`)
-- **Weekly Releases**: Every Monday, a GitHub release is created with the latest PDF
 - **Repository Updates**: The main `morning_briefing.pdf` file is updated with each run
 
 ### Dependencies

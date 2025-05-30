@@ -1,11 +1,12 @@
 #!/bin/bash
 
-# Local test script for GitHub Action workflow
-# This script mimics the GitHub Action environment for local testing
+# Local test script for Morning Briefing rendering
+# This script mimics the render job from the GitHub Action workflow
 
 set -e
 
 echo "🚀 Starting local Morning Briefing render test..."
+echo "📝 This script simulates the 'render' job from the GitHub Actions workflow"
 
 # Check if running in correct directory
 if [ ! -f "morning_briefing.qmd" ]; then
@@ -62,16 +63,25 @@ R -e "renv::restore()"
 # Render the document
 echo "🔄 Rendering Morning Briefing..."
 export QUARTO_DENO_DOM_LOG_LEVEL=WARNING
-quarto render morning_briefing.qmd --to typst-pdf
 
-# Check if PDF was generated
-if [ -f "morning_briefing.pdf" ]; then
-    echo "✅ Success! Morning Briefing PDF generated successfully"
-    echo "📄 File location: $(pwd)/morning_briefing.pdf"
-    echo "📏 File size: $(du -h morning_briefing.pdf | cut -f1)"
+if quarto render morning_briefing.qmd --to typst-pdf; then
+    echo "✅ PDF rendered successfully"
+    
+    # Get file size for logging (like in GitHub Actions)
+    size=$(du -h morning_briefing.pdf | cut -f1)
+    echo "📄 PDF size: $size"
+    echo "📁 File location: $(pwd)/morning_briefing.pdf"
+    
+    # Simulate artifact creation (create a local copy)
+    mkdir -p local-artifacts
+    cp morning_briefing.pdf local-artifacts/morning-briefing-local.pdf
+    echo "📦 Local artifact created: local-artifacts/morning-briefing-local.pdf"
+    
 else
-    echo "❌ Error: PDF generation failed"
+    echo "❌ PDF rendering failed"
     exit 1
 fi
 
-echo "🎉 Local test completed successfully!"
+echo ""
+echo "🎉 Render job completed successfully!"
+echo "📧 To test email functionality, run: ./test-email-local.sh"

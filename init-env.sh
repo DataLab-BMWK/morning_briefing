@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 
 show_help() {
-  echo "Usage: $0 [--what/-w all|r|python|julia] [--force/-f] [--help/-h]"
+  echo "Usage: $0 [--what/-w all|r|python] [--force/-f] [--help/-h]"
   echo "  --what/-w: Specify what to initialise (default: all)."
-  echo "    all: Initialise R (renv), Python (uv), and Julia (project)."
+  echo "    all: Initialise R (renv) and Python (uv)."
   echo "    r: Initialise R (renv)."
   echo "    python: Initialise Python (uv)."
-  echo "    julia: Initialise Julia (project)."
   echo "  --force/-f: Force initialisation regardless of existing files."
   echo "  --help/-h: Show this help message."
 }
@@ -41,13 +40,6 @@ initialise_uv() {
   fi
 }
 
-initialise_julia() {
-  if [ "${FORCE}" = true ] || [ ! -f "Project.toml" ]; then
-    julia -e 'using Pkg; Pkg.activate("."); Pkg.instantiate()'
-    julia --project=. -e 'using Pkg; Pkg.add("IJulia")'
-  fi
-}
-
 WHAT="all"
 FORCE=false
 
@@ -77,16 +69,12 @@ case $WHAT in
   all)
     initialise_r
     initialise_uv
-    initialise_julia
     ;;
   r)
     initialise_r
     ;;
   python)
     initialise_uv
-    ;;
-  julia)
-    initialise_julia
     ;;
   *)
     echo "Unknown option for --what: $WHAT"
